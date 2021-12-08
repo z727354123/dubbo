@@ -74,7 +74,7 @@ public class LoadBalanceBaseTest {
      */
     @BeforeEach
     public void setUp() throws Exception {
-
+        Runnable last = () -> {};
         invocation = mock(Invocation.class);
         given(invocation.getMethodName()).willReturn("method1");
         given(invocation.getArguments()).willReturn(new Object[] {"arg1","arg2","arg3"});
@@ -82,14 +82,49 @@ public class LoadBalanceBaseTest {
         invoker1 = mock(Invoker.class);
         invoker2 = mock(Invoker.class);
         invoker3 = mock(Invoker.class);
-        invoker4 = mock(Invoker.class);
-        invoker5 = mock(Invoker.class);
+        // invoker4 = mock(Invoker.class);
+        // invoker5 = mock(Invoker.class);
 
-        URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService");
-        URL url2 = URL.valueOf("test://127.0.0.1:2/DemoService");
-        URL url3 = URL.valueOf("test://127.0.0.1:3/DemoService");
-        URL url4 = URL.valueOf("test://127.0.0.1:4/DemoService");
-        URL url5 = URL.valueOf("test://127.0.0.1:5/DemoService");
+        // 加权随机
+        // URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService?weight=5");
+        // URL url2 = URL.valueOf("test://127.0.0.1:2/DemoService?weight=3");
+        // URL url3 = URL.valueOf("test://127.0.0.1:3/DemoService?weight=2");
+
+
+        // 最小活跃度
+        // URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService?weight=3"); // 5
+        // URL url2 = URL.valueOf("test://127.0.0.1:2/DemoService?weight=2"); // 2
+        // URL url3 = URL.valueOf("test://127.0.0.1:3/DemoService?weight=1"); // 2
+        // last = () -> {
+        //     // 5
+        //     RpcStatus.beginCount(invoker1.getUrl(), invocation.getMethodName());
+        //     RpcStatus.beginCount(invoker1.getUrl(), invocation.getMethodName());
+        //     RpcStatus.beginCount(invoker1.getUrl(), invocation.getMethodName());
+        //     RpcStatus.beginCount(invoker1.getUrl(), invocation.getMethodName());
+        //     RpcStatus.beginCount(invoker1.getUrl(), invocation.getMethodName());
+        //     // 2
+        //     RpcStatus.beginCount(invoker2.getUrl(), invocation.getMethodName());
+        //     RpcStatus.beginCount(invoker2.getUrl(), invocation.getMethodName());
+        //     // 2
+        //     RpcStatus.beginCount(invoker3.getUrl(), invocation.getMethodName());
+        //     RpcStatus.beginCount(invoker3.getUrl(), invocation.getMethodName());
+        // };
+
+        // 轮询
+        URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService?weight=5"); // 5
+        URL url2 = URL.valueOf("test://127.0.0.1:2/DemoService?weight=2"); // 2
+        URL url3 = URL.valueOf("test://127.0.0.1:3/DemoService?weight=1"); // 1
+
+        // 一致性 hash
+        // URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService?hash.arguments=0,2"); // 5
+        // URL url2 = URL.valueOf("test://127.0.0.1:2/DemoService"); // 2
+        // URL url3 = URL.valueOf("test://127.0.0.1:3/DemoService"); // 1
+
+
+
+
+        // URL url4 = URL.valueOf("test://127.0.0.1:4/DemoService");
+        // URL url5 = URL.valueOf("test://127.0.0.1:5/DemoService");
 
         given(invoker1.isAvailable()).willReturn(true);
         given(invoker1.getInterface()).willReturn(LoadBalanceBaseTest.class);
@@ -103,19 +138,21 @@ public class LoadBalanceBaseTest {
         given(invoker3.getInterface()).willReturn(LoadBalanceBaseTest.class);
         given(invoker3.getUrl()).willReturn(url3);
 
-        given(invoker4.isAvailable()).willReturn(true);
-        given(invoker4.getInterface()).willReturn(LoadBalanceBaseTest.class);
-        given(invoker4.getUrl()).willReturn(url4);
-
-        given(invoker5.isAvailable()).willReturn(true);
-        given(invoker5.getInterface()).willReturn(LoadBalanceBaseTest.class);
-        given(invoker5.getUrl()).willReturn(url5);
+        // given(invoker4.isAvailable()).willReturn(true);
+        // given(invoker4.getInterface()).willReturn(LoadBalanceBaseTest.class);
+        // given(invoker4.getUrl()).willReturn(url4);
+        //
+        // given(invoker5.isAvailable()).willReturn(true);
+        // given(invoker5.getInterface()).willReturn(LoadBalanceBaseTest.class);
+        // given(invoker5.getUrl()).willReturn(url5);
 
         invokers.add(invoker1);
         invokers.add(invoker2);
         invokers.add(invoker3);
-        invokers.add(invoker4);
-        invokers.add(invoker5);
+        // invokers.add(invoker4);
+        // invokers.add(invoker5);
+        last.run();
+
     }
 
     public Map<Invoker, AtomicLong> getInvokeCounter(int runs, String loadbalanceName) {
@@ -227,8 +264,10 @@ public class LoadBalanceBaseTest {
 
         URL url1 = URL.valueOf("test1://127.0.0.1:11/DemoService?weight=1&active=0");
         URL url2 = URL.valueOf("test2://127.0.0.1:12/DemoService?weight=9&active=0");
+
         URL url3 = URL.valueOf("test3://127.0.0.1:13/DemoService?weight=6&active=1");
         URL urlTmp = URL.valueOf("test4://127.0.0.1:9999/DemoService?weight=11&active=0");
+
         URL url5 = URL.valueOf("test5://127.0.0.1:15/DemoService?weight=15&active=0");
 
         given(weightInvoker1.isAvailable()).willReturn(true);
