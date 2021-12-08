@@ -90,11 +90,13 @@ public class RandomLoadBalance extends AbstractLoadBalance {
                 sameWeight = false;
             }
         }
+        // TODO:debug
         if (totalWeight > 0 && !sameWeight) {
             // 4. 生成 随机数 0~9 判断权重
             int offset = ThreadLocalRandom.current().nextInt(totalWeight); // 10
             for (int i = 0; i < length; i++) {
                 if (offset < weights[i]) {
+                    // TODO:debug
                     return invokers.get(i);
                 }
             }
