@@ -55,14 +55,14 @@ public abstract class AbstractLoadBalance implements LoadBalance {
 
     @Override
     public <T> Invoker<T> select(List<Invoker<T>> invokers, URL url, Invocation invocation) {
-        // 通用处理
+        // 1. 通用处理
         if (CollectionUtils.isEmpty(invokers)) {
             return null;
         }
         if (invokers.size() == 1) {
             return invokers.get(0);
         }
-        // 实际 具体 算法
+        // 2. 实际 具体 算法
         return doSelect(invokers, url, invocation);
     }
 
@@ -81,6 +81,7 @@ public abstract class AbstractLoadBalance implements LoadBalance {
      * @return weight
      */
     protected int getWeight(Invoker<?> invoker, Invocation invocation) {
+        // 3. 通用权重处理
         int weight;
         URL url = invoker.getUrl();
         // Multiple registry scenario, load balance among multiple registries.
@@ -91,14 +92,15 @@ public abstract class AbstractLoadBalance implements LoadBalance {
             // 获取服务A 设置的权重 默认:100
             weight = url.getMethodParameter(invocation.getMethodName(), WEIGHT_KEY, DEFAULT_WEIGHT);
             if (weight > 0) {
-                // 获取服务A 服务运行时长 单位:毫秒
+                // 4. 获取服务A 服务注册的时间戳 单位:毫秒 timestamp 参数
                 long timestamp = invoker.getUrl().getParameter(TIMESTAMP_KEY, 0L);
                 if (timestamp > 0L) {
+                    // 5. 计算 运行时长,
                     long uptime = System.currentTimeMillis() - timestamp;
                     if (uptime < 0) {
                         return 1;
                     }
-                    // 获取服务A 设置的 预热时长: 默认
+                    // 6. 对比预热时间
                     int warmup = invoker.getUrl().getParameter(WARMUP_KEY, DEFAULT_WARMUP);
                     if (uptime > 0 && uptime < warmup) {
                         weight = calculateWarmupWeight((int)uptime, warmup, weight);
