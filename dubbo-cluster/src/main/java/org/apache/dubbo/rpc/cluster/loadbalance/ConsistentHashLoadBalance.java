@@ -18,6 +18,7 @@ package org.apache.dubbo.rpc.cluster.loadbalance;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.io.Bytes;
+import org.apache.dubbo.common.utils.MD5Utils;
 import org.apache.dubbo.rpc.Invocation;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.support.RpcUtils;
@@ -66,11 +67,11 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
         String methodName = RpcUtils.getMethodName(invocation);
         // Service.method   服务.方法, DemoService.method1
         String key = invokers.get(0).getUrl().getServiceKey() + "." + methodName;
-        // 1. 获取 invokers 原始的 hashcode, 用于 判断服务列表是否发生编码
+        // 1. 获取 服务列表 原始的 hashcode, 用于 判断服务列表是否发生编码
         int invokersHashCode = getCorrespondingHashCode(invokers);
         ConsistentHashSelector<T> selector = (ConsistentHashSelector<T>) selectors.get(key);
         if (selector == null || selector.identityHashCode != invokersHashCode) {
-            // 2. 初始化 ConsistentHashSelector
+            // 2. 初始化 ConsistentHashSelector TODO:debug
             selectors.put(key, new ConsistentHashSelector<T>(invokers, methodName, invokersHashCode));
             selector = (ConsistentHashSelector<T>) selectors.get(key);
         }
@@ -151,6 +152,7 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
             // 获取参与 hash 计算的参数下标值，默认对第一个参数进行 hash 运算
             String[] index = COMMA_SPLIT_PATTERN.split(url.getMethodParameter(methodName, HASH_ARGUMENTS, "0"));
             // 2. 下标数组, 对 URL请求参数的 几个下标进行hash  如, [0, 2], 默认 [0]
+            // TODO:debug
             argumentIndex = new int[index.length];
             for (int i = 0; i < index.length; i++) {
                 argumentIndex[i] = Integer.parseInt(index[i]);
@@ -159,13 +161,14 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
             for (Invoker<T> invoker : invokers) {
                 String address = invoker.getUrl().getAddress();
                 for (int i = 0; i < replicaNumber / 4; i++) {
-                    // 对 address + i 进行 md5 运算，得到一个长度为16的字节数组
+                    // 对 address + i 进行 md5 运算，得到一个长度为 16的 byte数组
                     // address 0 ~ address 39
-                    // "127.0.0.1:1" + "0"  ~ "127.0.0.1:1" + "39"
-                    // digest 有 16 段
-                    // int = 4 byte
-                    // a89e84e7bbcfbc1120536123d67982d8
-                    // a89e84e7 bbcfbc11 20536123 d67982d8
+                    // 4 byte = int
+                    // 16 byte = 4 int
+                    // 一个 md5 结果: 7A4A1D992BF4E98DEE11852A48215193
+                    // 拆分成 4段, 代表 4个 [0, 2^32-1] 节点
+                    // 7A4A1D99 2BF4E98D EE11852A 48215193
+                    // TODO:debug i==39
                     byte[] digest = Bytes.getMD5(address + i);
                     for (int h = 0; h < 4; h++) {
                         // h = 0 时，取 digest 中下标为 0 ~ 3 的4个字节进行位运算
@@ -184,15 +187,16 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
         }
 
         public Invoker<T> select(Invocation invocation) {
-            // 1. 需要 hash 的参数
+            // 1. 需要 hash 的参数 TODO:debug
             String key = toKey(invocation.getArguments());
             byte[] digest = Bytes.getMD5(key);
-            // 2. 命中圆环节点
+            // 2. 命中圆环节点 取 md5 的第一段 做为 [0, 2^32-1] 节点
+            // TODO:debug
             return selectForKey(hash(digest, 0));
         }
         private String toKey(Object[] args) {
             StringBuilder buf = new StringBuilder();
-            // 需要 hash 的参数 下标数组
+            // 需要 hash 的参数 下标数组 也就是 hash.arguments的配置  TODO:debug
             for (int i : argumentIndex) {
                 if (i >= 0 && i < args.length) {
                     buf.append(args[i]);
@@ -202,9 +206,10 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
         }
         private Invoker<T> selectForKey(long hash) {
             // tree 向下 取 元素,
-            // 到 TreeMap 中查找第一个节点值大于或等于当前 hash 的 Entry
+            // 1. 到 TreeMap 中查找第一个节点值大于或等于当前 hash 的 Entry
             Map.Entry<Long, Invoker<T>> entry = virtualInvokers.ceilingEntry(hash);
             // 空则取 TreeMap 最小 Entry
+            // TODO: debug
             if (entry == null) {
                 entry = virtualInvokers.firstEntry();
             }
@@ -242,10 +247,10 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
              * or
              * 2. Not have overloaded (request count already accept < thread (average request count * overloadRatioAllowed ))
              */
-            // 循环至 没有过载的 服务
+            // 循环至 没有过载的 服务 TODO: debug
             while (serverRequestCountMap.containsKey(serverAddress)
                 && serverRequestCountMap.get(serverAddress).get() >= overloadThread) {
-                // 获取下一个节点
+                // 获取下一个节点, 循环至 没有过载的服务
                 entry = getNextInvokerNode(virtualInvokers, entry);
                 serverAddress = entry.getValue().getUrl().getAddress();
             }
@@ -270,16 +275,8 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
             return nextEntry;
         }
 
-        // 一个 byte 8 位
-        // 4个byte 32位
-        // 例如:   number = 0 时，取 digest 中下标为 0 ~ 3 的4个字节进行位运算
-        // long = 8byte
-        // 4个byte 空,   [byte3][byte2][byte1][byte0]
-        // 3 2 1 0
-        // 例如:   number = 1 时，取 digest 中下标为 4 ~ 7 的4个字节进行位运算
-        // 4个byte 空,   [byte3][byte2][byte1][byte0]
-        // 7 6 5 4
         // 故返回最大值 也就 0xFFFFFFFFL = 2^32 -1
+        // 0xFFFFFFFFL 在 int = -1
         // 使用 Long 返回 保证 正数
         private long hash(byte[] digest, int number) {
             return (((long) (digest[3 + number * 4] & 0xFF) << 24)
@@ -291,10 +288,9 @@ public class ConsistentHashLoadBalance extends AbstractLoadBalance {
 
         public static void main(String[] args) {
             System.out.println(0xFFFFFFFFL);
-            System.out.println((1L<<32) -1);
+            System.out.println(Math.pow(2, 32) - 1);
             System.out.println(Integer.MAX_VALUE);
             System.out.println((int) 0xFFFFFFFFL);
-
         }
     }
 
