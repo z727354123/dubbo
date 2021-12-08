@@ -76,15 +76,15 @@ public class LeastActiveLoadBalance extends AbstractLoadBalance {
         boolean sameWeight = true;
 
 
-        // 2. 遍历服务
+        // 4. 遍历服务
         for (int i = 0; i < length; i++) {
             Invoker<T> invoker = invokers.get(i);
             // 获取 活跃度 + 权重
             int active = RpcStatus.getStatus(invoker.getUrl(), invocation.getMethodName()).getActive();
             int afterWarmup = getWeight(invoker, invocation);
-            // 权重数组
+            // 权重数组 TODO:debug
             weights[i] = afterWarmup;
-            // 3. 初次 或 有最小活跃度, 重置相关
+            // 5. 初次 或 有最小活跃度, 重置相关
             if (leastActive == -1 || active < leastActive) {
                 // 最小活跃度
                 leastActive = active;
@@ -99,7 +99,7 @@ public class LeastActiveLoadBalance extends AbstractLoadBalance {
                 // 重置 权重相等
                 sameWeight = true;
             } else if (active == leastActive) {
-                // 5. 其余相等的最小
+                // 6. 其余相等的最小
                 // 维护 下标数组 + 数量
                 leastIndexes[leastCount++] = i;
                 // 维护 总权重
@@ -110,11 +110,11 @@ public class LeastActiveLoadBalance extends AbstractLoadBalance {
                 }
             }
         }
-        // 6. 单个最小活跃直接返回
+        // 7. 单个最小活跃直接返回
         if (leastCount == 1) {
             return invokers.get(leastIndexes[0]);
         }
-        // 7. 多个权重随机
+        // 8. 多个权重随机
         if (!sameWeight && totalWeight > 0) {
             // 权重不等随机
             int offsetWeight = ThreadLocalRandom.current().nextInt(totalWeight);
