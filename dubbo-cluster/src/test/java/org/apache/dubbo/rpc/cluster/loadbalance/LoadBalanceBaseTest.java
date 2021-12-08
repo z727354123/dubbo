@@ -86,9 +86,9 @@ public class LoadBalanceBaseTest {
         // invoker5 = mock(Invoker.class);
 
         // 加权随机
-        // URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService?weight=5");
-        // URL url2 = URL.valueOf("test://127.0.0.1:2/DemoService?weight=3");
-        // URL url3 = URL.valueOf("test://127.0.0.1:3/DemoService?weight=2");
+        URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService?weight=5");
+        URL url2 = URL.valueOf("test://127.0.0.1:2/DemoService?weight=3");
+        URL url3 = URL.valueOf("test://127.0.0.1:3/DemoService?weight=2");
 
 
         // 最小活跃度
@@ -111,9 +111,9 @@ public class LoadBalanceBaseTest {
         // };
 
         // 轮询
-        URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService?weight=5"); // 5
-        URL url2 = URL.valueOf("test://127.0.0.1:2/DemoService?weight=2"); // 2
-        URL url3 = URL.valueOf("test://127.0.0.1:3/DemoService?weight=1"); // 1
+        // URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService?weight=5"); // 5
+        // URL url2 = URL.valueOf("test://127.0.0.1:2/DemoService?weight=2"); // 2
+        // URL url3 = URL.valueOf("test://127.0.0.1:3/DemoService?weight=1"); // 1
 
         // 一致性 hash
         // URL url1 = URL.valueOf("test://127.0.0.1:1/DemoService?hash.arguments=0,2"); // 5
