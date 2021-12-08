@@ -124,6 +124,11 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
         // 1. 服务标识: 如 "UserService.query"
         String key = invokers.get(0).getUrl().getServiceKey() + "." + invocation.getMethodName();
         // 2. 获取 url 到 WeightedRoundRobin 映射表，如果为空，则创建一个新的
+        // 结构如下, 类似算法的数组, 用 AtomicLong 处理并发问题
+        //{
+        //    "url1": WeightedRoundRobin@123{权重, 当前权重},
+        //    "url2": WeightedRoundRobin@456{权重, 当前权重},
+        //}
         ConcurrentMap<String, WeightedRoundRobin> map = methodWeightMap.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
         // 总权重 用于选中的 服务 - total
         int totalWeight = 0;
@@ -134,41 +139,34 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
         Invoker<T> selectedInvoker = null;
         WeightedRoundRobin selectedWRR = null;
 
-        // 下面这个循环主要做了这样几件事情：
-        //   1. 遍历 Invoker 列表，检测当前 Invoker 是否有
-        //      相应的 WeightedRoundRobin，没有则创建
-        //   2. 检测 Invoker 权重是否发生了变化，若变化了，
-        //      则更新 WeightedRoundRobin 的 weight 字段
-        //   3. 让 current 字段加上自身权重，等价于 current += weight
-        //   4. 设置 lastUpdate 字段，即 lastUpdate = now
-        //   5. 寻找具有最大 current 的 Invoker，以及 Invoker 对应的 WeightedRoundRobin，
-        //      暂存起来，留作后用
-        //   6. 计算权重总和
+        // 3. 循环计算 并 找出第一个 最大权重的服务
         for (Invoker<T> invoker : invokers) {
             String identifyString = invoker.getUrl().toIdentityString();
             int weight = getWeight(invoker, invocation);
             // 检测当前 Invoker 是否有对应的 WeightedRoundRobin，没有则创建,
             // 类似于 [5, 2, 1] 的单个元素
-            // 3. 维护 map {
+            // 4. 维护 map {
             //        "url1": WeightedRoundRobin@123,
             //        "url2": WeightedRoundRobin@456,
-            //     },
+            //     }, 创建 WeightedRoundRobin
+            // TODO:debug
             WeightedRoundRobin weightedRoundRobin = map.computeIfAbsent(identifyString, k -> {
                 WeightedRoundRobin wrr = new WeightedRoundRobin();
                 wrr.setWeight(weight);
                 return wrr;
             });
+
             // 权重重置 Invoker 权重不等于 WeightedRoundRobin 中保存的权重，说明权重变化了，此时进行更新
             if (weight != weightedRoundRobin.getWeight()) {
                 //weight changed
                 weightedRoundRobin.setWeight(weight);
             }
 
-            // 4. 让 current 加上自身权重，等价于 current += weight
+            // 5. 每个元素 加上自身权重，等价于 [0, 0, 0] + [5, 2, 1] = [5, 2, 1]
             long cur = weightedRoundRobin.increaseCurrent();
             weightedRoundRobin.setLastUpdate(now);
 
-            // 5. 找出最大的 current
+            // 6. 找出最大的 current
             if (cur > maxCurrent) {
                 maxCurrent = cur;
                 selectedInvoker = invoker;
@@ -183,10 +181,14 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
         if (invokers.size() != map.size()) {
             map.entrySet().removeIf(item -> now - item.getValue().getLastUpdate() > RECYCLE_PERIOD);
         }
-        // 6. 返回最大权重
+
+        // 7. 返回最大权重
+        // TODO:debug
         if (selectedInvoker != null) {
-            // 当前选中 - 全部权重和
+            // 8, 当前选中 - 全部权重和
+            // 等价于  [5, 2, 1] - [8, 0, 0] = [-3, 2, 1]
             selectedWRR.sel(totalWeight);
+            // TODO:debug
             return selectedInvoker;
         }
         // should not happen here
