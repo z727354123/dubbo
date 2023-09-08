@@ -1,19 +1,9 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+/**
+ * AbstractLoadBalance 抽象类是一个加载均衡的基类，它实现了 LoadBalance 接口。
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 它定义了一些抽象方法，并提供了一些公共的方法，以供具体的负载均衡算法类继承和实现。
  */
+
 package org.apache.dubbo.rpc.cluster.loadbalance;
 
 import org.apache.dubbo.common.URL;
@@ -33,18 +23,15 @@ import static org.apache.dubbo.rpc.cluster.Constants.DEFAULT_WEIGHT;
 import static org.apache.dubbo.rpc.cluster.Constants.WARMUP_KEY;
 import static org.apache.dubbo.rpc.cluster.Constants.WEIGHT_KEY;
 
-/**
- * AbstractLoadBalance
- */
 public abstract class AbstractLoadBalance implements LoadBalance {
     /**
-     * Calculate the weight according to the uptime proportion of warmup time
-     * the new weight will be within 1(inclusive) to weight(inclusive)
+     * 根据启动时间和预热时间计算权重
+     * 新的权重在1到weight之间（包括1和weight）
      *
-     * @param uptime the uptime in milliseconds
-     * @param warmup the warmup time in milliseconds
-     * @param weight the weight of an invoker
-     * @return weight which takes warmup into account
+     * @param uptime 启动时间，单位是毫秒
+     * @param warmup 预热时间，单位是毫秒
+     * @param weight 调用者的权重
+     * @return 考虑预热时间后的权重
      */
     static int calculateWarmupWeight(int uptime, int warmup, int weight) {
         int ww = (int) ( uptime / ((float) warmup / weight));
@@ -62,16 +49,24 @@ public abstract class AbstractLoadBalance implements LoadBalance {
         return doSelect(invokers, url, invocation);
     }
 
+    /**
+     * 选择一个调用者
+     *
+     * @param invokers 调用者列表
+     * @param url URL 对象
+     * @param invocation Invocation 对象
+     * @return 选中的调用者
+     */
     protected abstract <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation);
 
 
     /**
-     * Get the weight of the invoker's invocation which takes warmup time into account
-     * if the uptime is within the warmup time, the weight will be reduce proportionally
+     * 获得调用者的权重，考虑预热时间
+     * 如果调用者运行时间不足预热时间，那么权重会按比例降低
      *
-     * @param invoker    the invoker
-     * @param invocation the invocation of this invoker
-     * @return weight
+     * @param invoker 调用者
+     * @param invocation 该调用者的调用
+     * @return 调用者的权重
      */
     protected int getWeight(Invoker<?> invoker, Invocation invocation) {
         int weight;
@@ -80,7 +75,7 @@ public abstract class AbstractLoadBalance implements LoadBalance {
             url = ((ClusterInvoker<?>) invoker).getRegistryUrl();
         }
 
-        // Multiple registry scenario, load balance among multiple registries.
+        // 多个注册中心的情况下，在多个注册中心之间进行负载均衡
         if (REGISTRY_SERVICE_REFERENCE_PATH.equals(url.getServiceInterface())) {
             weight = url.getParameter(WEIGHT_KEY, DEFAULT_WEIGHT);
         } else {
