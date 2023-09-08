@@ -1,19 +1,10 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * 这个类是Dubbo负载均衡中的一个具体实现，提供了随机选择一个服务提供者的功能。
+ * 可以为每个服务提供者定义一个权重，如果权重都相同，则使用随机数选择一个服务提供者；
+ * 如果权重不同，则使用根据权重进行随机选择。
+ * 当某个机器的性能较好时，可以设置较大的权重；当性能较差时，可以设置较小的权重。
  */
+
 package org.apache.dubbo.rpc.cluster.loadbalance;
 
 import org.apache.dubbo.common.URL;
@@ -32,55 +23,55 @@ import static org.apache.dubbo.common.constants.RegistryConstants.REGISTRY_SERVI
 import static org.apache.dubbo.rpc.cluster.Constants.WEIGHT_KEY;
 
 /**
- * This class select one provider from multiple providers randomly.
- * You can define weights for each provider:
- * If the weights are all the same then it will use random.nextInt(number of invokers).
- * If the weights are different then it will use random.nextInt(w1 + w2 + ... + wn)
- * Note that if the performance of the machine is better than others, you can set a larger weight.
- * If the performance is not so good, you can set a smaller weight.
+ * 从多个服务提供者中随机选择一个进行调用的负载均衡算法实现。
+ * 你可以为每个服务提供者定义权重：
+ * 如果所有服务提供者的权重相同，将使用random.nextInt(number of invokers)选择；
+ * 如果权重不同，将使用random.nextInt(w1 + w2 + ... + wn)选择；
+ * 注意，如果某个机器的性能比其他机器好，可以设置较大的权重；
+ * 如果性能不好，可以设置较小的权重。
  */
 public class RandomLoadBalance extends AbstractLoadBalance {
 
     public static final String NAME = "random";
 
     /**
-     * Select one invoker between a list using a random criteria
+     * 根据随机算法从服务提供者列表中选择一个服务提供者进行调用
      *
-     * @param invokers   List of possible invokers
+     * @param invokers   可能的服务提供者列表
      * @param url        URL
-     * @param invocation Invocation
+     * @param invocation 调用信息
      * @param <T>
-     * @return The selected invoker
+     * @return 被选择的服务提供者
      */
     @Override
     protected <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation) {
-        // Number of invokers
+        // 服务提供者个数
         int length = invokers.size();
 
         if (!needWeightLoadBalance(invokers, invocation)) {
             return invokers.get(ThreadLocalRandom.current().nextInt(length));
         }
 
-        // Every invoker has the same weight?
+        // 每个服务提供者的权重是否相同
         boolean sameWeight = true;
-        // the maxWeight of every invoker, the minWeight = 0 or the maxWeight of the last invoker
+        // 每个服务提供者的最大权重，最小权重为0或最后一个服务提供者的权重
         int[] weights = new int[length];
-        // The sum of weights
+        // 总权重
         int totalWeight = 0;
         for (int i = 0; i < length; i++) {
             int weight = getWeight(invokers.get(i), invocation);
-            // Sum
+            // 累加权重
             totalWeight += weight;
-            // save for later use
+            // 保存权重供后面使用
             weights[i] = totalWeight;
             if (sameWeight && totalWeight != weight * (i + 1)) {
                 sameWeight = false;
             }
         }
         if (totalWeight > 0 && !sameWeight) {
-            // If (not every invoker has the same weight & at least one invoker's weight>0), select randomly based on totalWeight.
+            // 如果（不是所有服务提供者的权重相同 & 至少有一个服务提供者的权重>0）,根据总权重选择随机值。
             int offset = ThreadLocalRandom.current().nextInt(totalWeight);
-            // Return an invoker based on the random value.
+            // 根据随机值选择一个服务提供者
             if (length <= 4) {
                 for (int i = 0; i < length; i++) {
                     if (offset < weights[i]) {
@@ -100,10 +91,18 @@ public class RandomLoadBalance extends AbstractLoadBalance {
                 return invokers.get(i);
             }
         }
-        // If all invokers have the same weight value or totalWeight=0, return evenly.
+        // 如果所有服务提供者的权重相同或者总权重=0，则均匀返回一个服务提供者。
         return invokers.get(ThreadLocalRandom.current().nextInt(length));
     }
 
+    /**
+     * 判断是否需要进行权重负载均衡
+     *
+     * @param invokers    服务提供者列表
+     * @param invocation 调用信息
+     * @param <T>
+     * @return 是否需要进行权重负载均衡
+     */
     private <T> boolean needWeightLoadBalance(List<Invoker<T>> invokers, Invocation invocation) {
         Invoker<T> invoker = invokers.get(0);
         URL invokerUrl = invoker.getUrl();
@@ -111,7 +110,7 @@ public class RandomLoadBalance extends AbstractLoadBalance {
             invokerUrl = ((ClusterInvoker<?>) invoker).getRegistryUrl();
         }
 
-        // Multiple registry scenario, load balance among multiple registries.
+        // 多注册中心场景，多个注册中心之间进行负载均衡
         if (REGISTRY_SERVICE_REFERENCE_PATH.equals(invokerUrl.getServiceInterface())) {
             String weight = invokerUrl.getParameter(WEIGHT_KEY);
             return StringUtils.isNotEmpty(weight);

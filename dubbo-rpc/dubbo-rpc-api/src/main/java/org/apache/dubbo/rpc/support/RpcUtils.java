@@ -134,14 +134,24 @@ public class RpcUtils {
             return false;
         }
     }
-
+    /**
+     * 获取方法名
+     * @param invocation 调用对象
+     * @return 方法名
+     */
     public static String getMethodName(Invocation invocation) {
+        // 判断方法名是否为特定值 "$INVOKE"
         if ($INVOKE.equals(invocation.getMethodName())
+            // 判断调用对象的参数数组是否为非空
             && invocation.getArguments() != null
+            // 判断调用对象的参数数组的长度是否大于0
             && invocation.getArguments().length > 0
+            // 判断调用对象的参数数组的第一个元素是否为字符串类型
             && invocation.getArguments()[0] instanceof String) {
+            // 返回调用对象的参数数组的第一个元素，强制转换为字符串类型
             return (String) invocation.getArguments()[0];
         }
+        // 返回调用对象的方法名
         return invocation.getMethodName();
     }
 

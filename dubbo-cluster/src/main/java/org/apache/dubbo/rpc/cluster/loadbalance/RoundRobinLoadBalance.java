@@ -1,19 +1,9 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+/**
+ * Round robin load balance.
+ * 循环负载均衡算法的实现
+ * 该算法会依次轮询选择可用的服务提供者
  */
+
 package org.apache.dubbo.rpc.cluster.loadbalance;
 
 import org.apache.dubbo.common.URL;
@@ -29,20 +19,17 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Round robin load balance.
- */
 public class RoundRobinLoadBalance extends AbstractLoadBalance {
-    public static final String NAME = "roundrobin";
+    public static final String NAME = "roundrobin"; // 负载均衡名称
 
-    private static final int RECYCLE_PERIOD = 60000;
+    private static final int RECYCLE_PERIOD = 60000; // 回收周期
 
-    private final ConcurrentMap<String, ConcurrentMap<String, WeightedRoundRobin>> methodWeightMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, ConcurrentMap<String, WeightedRoundRobin>> methodWeightMap = new ConcurrentHashMap<>(); // 方法级别的权重映射表
 
     protected static class WeightedRoundRobin {
         private int weight;
-        private final AtomicLong current = new AtomicLong(0);
-        private long lastUpdate;
+        private final AtomicLong current = new AtomicLong(0); // 当前权重
+        private long lastUpdate; // 最后更新时间
 
         public int getWeight() {
             return weight;
@@ -50,15 +37,15 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
 
         public void setWeight(int weight) {
             this.weight = weight;
-            current.set(0);
+            current.set(0); // 设置权重后，重置当前权重为0
         }
 
         public long increaseCurrent() {
-            return current.addAndGet(weight);
+            return current.addAndGet(weight); // 增加当前权重，并返回增加后的值
         }
 
         public void sel(int total) {
-            current.addAndGet(-1 * total);
+            current.addAndGet(-1 * total); // 减少当前权重
         }
 
         public long getLastUpdate() {
@@ -71,13 +58,8 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
     }
 
     /**
-     * get invoker addr list cached for specified invocation
-     * <p>
-     * <b>for unit test only</b>
-     *
-     * @param invokers
-     * @param invocation
-     * @return
+     * 获取缓存的调用地址列表
+     * 仅用于单元测试
      */
     protected <T> Collection<String> getInvokerAddrList(List<Invoker<T>> invokers, Invocation invocation) {
         String key = invokers.get(0).getUrl().getServiceKey() + "." + RpcUtils.getMethodName(invocation);
@@ -92,14 +74,14 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
     protected <T> Invoker<T> doSelect(List<Invoker<T>> invokers, URL url, Invocation invocation) {
         String key = invokers.get(0).getUrl().getServiceKey() + "." + RpcUtils.getMethodName(invocation);
         ConcurrentMap<String, WeightedRoundRobin> map = ConcurrentHashMapUtils.computeIfAbsent(methodWeightMap, key, k -> new ConcurrentHashMap<>());
-        int totalWeight = 0;
-        long maxCurrent = Long.MIN_VALUE;
+        int totalWeight = 0; // 总权重
+        long maxCurrent = Long.MIN_VALUE; // 最大当前权重
         long now = System.currentTimeMillis();
-        Invoker<T> selectedInvoker = null;
-        WeightedRoundRobin selectedWRR = null;
+        Invoker<T> selectedInvoker = null; // 被选中的调用者
+        WeightedRoundRobin selectedWRR = null; // 被选中的调用者对应的权重对象
         for (Invoker<T> invoker : invokers) {
-            String identifyString = invoker.getUrl().toIdentityString();
-            int weight = getWeight(invoker, invocation);
+            String identifyString = invoker.getUrl().toIdentityString(); // 调用者的标识字符串
+            int weight = getWeight(invoker, invocation); // 调用者的权重
             WeightedRoundRobin weightedRoundRobin = ConcurrentHashMapUtils.computeIfAbsent(map, identifyString, k -> {
                 WeightedRoundRobin wrr = new WeightedRoundRobin();
                 wrr.setWeight(weight);
@@ -107,27 +89,30 @@ public class RoundRobinLoadBalance extends AbstractLoadBalance {
             });
 
             if (weight != weightedRoundRobin.getWeight()) {
-                //weight changed
+                // 权重发生变化，更新权重
                 weightedRoundRobin.setWeight(weight);
             }
-            long cur = weightedRoundRobin.increaseCurrent();
-            weightedRoundRobin.setLastUpdate(now);
+            long cur = weightedRoundRobin.increaseCurrent(); // 增加当前权重，并返回增加后的值
+            weightedRoundRobin.setLastUpdate(now); // 更新最后更新时间
             if (cur > maxCurrent) {
+                // 选择具有最大当前权重的调用者
                 maxCurrent = cur;
                 selectedInvoker = invoker;
                 selectedWRR = weightedRoundRobin;
             }
             totalWeight += weight;
         }
+
+        // 移除长时间没有更新的权重对象
         if (invokers.size() != map.size()) {
             map.entrySet().removeIf(item -> now - item.getValue().getLastUpdate() > RECYCLE_PERIOD);
         }
+
         if (selectedInvoker != null) {
-            selectedWRR.sel(totalWeight);
+            selectedWRR.sel(totalWeight); // 减少总权重
             return selectedInvoker;
         }
-        // should not happen here
+        // 如果没有找到合适的调用者，则默认选择列表中的第一个
         return invokers.get(0);
     }
-
 }
